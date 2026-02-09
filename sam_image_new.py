@@ -12,7 +12,12 @@ from sam3.model.sam3_image_processor import Sam3Processor
 
 
 def segment_image(image_path, seg_prompt, processor):
-    image = Image.open(image_path).convert("RGB")
+    try:
+        image = Image.open(image_path).convert("RGB")
+    except (OSError, IOError) as e:
+        print(f"Error loading image {image_path}: {e}")
+        return None, None, None
+    
     inference_state = processor.set_image(image)
     output = processor.set_text_prompt(state = inference_state, prompt = seg_prompt)
     # print(output)
@@ -27,6 +32,15 @@ def apply_mask_black_bg(image, mask, destination_dir, file, mode):
     """
     Apply binary masks to the image with a black background.
     """
+    # Ensure mask dimensions match image dimensions
+    if mask.shape != image.shape[:2]:
+        # If mask is transposed, transpose it back
+        if mask.shape == (image.shape[1], image.shape[0]):
+            mask = mask.T
+        else:
+            # Resize mask to match image dimensions
+            mask = cv2.resize(mask.astype(np.uint8), (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
+    
     mask_3d = np.repeat(mask[:, :, np.newaxis], 3, axis = 2)
     masked_image = image * mask_3d
     fn, ext = os.path.splitext(file)
@@ -76,10 +90,10 @@ def segment_image_with_black_bg(image, mask_image_path, destination_dir, file):
 
 # src_dir = "/home/ywu840/sam3/test_data"
 # src_dir = "/raid/ywu840/Data/AnimalReID/Stoat/train"
-src_dir = "/data/yil708/Code-Skink/Skink_ID_Split_V3/query"
+src_dir = "/data/yil708/Code-Skink/sam3/dataset/train"
 src_files = sorted(os.listdir(src_dir))
 # dst_dir = "/home/ywu840/sam3/outputs"
-dst_dir = "/data/yil708/Code-Skink/Skink_ID_Split_V3/query_sam3"
+dst_dir = "/data/yil708/Code-Skink/sam3/dataset/train_sam3_Lizard"
 os.makedirs(dst_dir, exist_ok = True)
 MODE = "best"
 DEVICE = torch.device(f"cuda:{0}" if torch.cuda.is_available() else "cpu")
@@ -90,9 +104,20 @@ model = build_sam3_image_model()
 model = model.to(DEVICE)
 processor = Sam3Processor(model, device = DEVICE)
 num_of_success = 0
+num_of_skipped = 0
+num_of_corrupted = 0
+corrupted_files = []
 # src_files = ["43_-1_0_134_leftphoto.jpg", "44_-1_0_135_leftphoto.jpg", "44_-1_1_135_rightphoto.jpg", "5_-1_13_837_rightphoto.jpg", "69_-1_13_836_rightphoto.jpg"]
 for file in src_files:
     fn, ext = os.path.splitext(file)
+    
+    # Skip if already processed
+    output_path = os.path.join(dst_dir, file)
+    if os.path.exists(output_path):
+        print(f"Skipping {file} - already processed\n")
+        num_of_skipped += 1
+        continue
+    
     # animal = "Animal"
     animal = "Lizard"
     # animal = file.split("_")[0]
@@ -110,6 +135,14 @@ for file in src_files:
     # num_of_success += 1
     print(f"Image Shape: {image.shape}")
     binary_masks, boxes, scores = segment_image(image_path = img_path, seg_prompt = animal, processor = processor)
+    
+    # Check if image is corrupted
+    if binary_masks is None:
+        print(f"Skipping corrupted image: {file}\n")
+        num_of_corrupted += 1
+        corrupted_files.append(file)
+        continue
+    
     scores = scores.cpu().numpy()
     if len(scores) == 0:
         print(f"No masks detected for {img_path}!\n")
@@ -126,7 +159,26 @@ for file in src_files:
         num_of_success += 1
         # apply_mask_transparent_bg(image = image, mask = binary_masks[max_score_idx], destination_dir = dst_dir, file = file, mode = MODE)
         # crop_to_content(image = image, mask = binary_masks[max_score_idx], destination_dir = dst_dir, file = file, mode = MODE)
-print(f"Number of saved files: {num_of_success}")
+
+print(f"\n{'='*60}")
+print(f"PROCESSING COMPLETE")
+print(f"{'='*60}")
+print(f"Newly processed files: {num_of_success}")
+print(f"Skipped (already exists): {num_of_skipped}")
+print(f"Corrupted/unreadable files: {num_of_corrupted}")
+print(f"Total processed: {num_of_success + num_of_skipped}")
+print(f"{'='*60}")
+
+# Save corrupted files list if any
+if corrupted_files:
+    corrupted_log = os.path.join(dst_dir, "corrupted_files.txt")
+    with open(corrupted_log, "w") as f:
+        for corrupted_file in corrupted_files:
+            f.write(f"{corrupted_file}\n")
+    print(f"\nCorrupted files list saved to: {corrupted_log}")
+    print(f"First few corrupted files: {corrupted_files[:5]}")
+    if len(corrupted_files) > 5:
+        print(f"... and {len(corrupted_files) - 5} more")
 # binary_masks, boxes, scores = segment_image(image_path = img_path, seg_prompt = "Sea star", processor = processor)
 # binary_masks = binary_masks.squeeze(0).cpu().numpy()
 # apply_mask_black_bg(image = image, mask = binary_masks, destination_dir = dst_dir, file = "0_-1_1_3213.jpg")
