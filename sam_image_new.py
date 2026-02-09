@@ -88,12 +88,11 @@ def segment_image_with_black_bg(image, mask_image_path, destination_dir, file):
     print(f"{file} has been saved.\n")
 
 
-# src_dir = "/home/ywu840/sam3/test_data"
 # src_dir = "/raid/ywu840/Data/AnimalReID/Stoat/train"
 src_dir = "/data/yil708/Code-Skink/sam3/dataset/train"
 src_files = sorted(os.listdir(src_dir))
 # dst_dir = "/home/ywu840/sam3/outputs"
-dst_dir = "/data/yil708/Code-Skink/sam3/dataset/train_sam3_Lizard"
+dst_dir = "/data/yil708/Code-Skink/sam3/dataset/train_sam3_Animal"
 os.makedirs(dst_dir, exist_ok = True)
 MODE = "best"
 DEVICE = torch.device(f"cuda:{0}" if torch.cuda.is_available() else "cpu")
@@ -117,9 +116,11 @@ for file in src_files:
         print(f"Skipping {file} - already processed\n")
         num_of_skipped += 1
         continue
-    
-    # animal = "Animal"
-    animal = "Lizard"
+    ##########################################
+    animal = "Animal"
+    # animal = "Lizard"
+    ##########################################
+
     # animal = file.split("_")[0]
     # if animal != "Nyala":
     #     continue
