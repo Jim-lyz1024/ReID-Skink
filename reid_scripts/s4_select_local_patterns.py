@@ -234,9 +234,9 @@ def fg_bbox(foreground_masks):
 
 # src_dir = "/raid/ywu840/Data/Animal_sam3/Stoat"
 # src_dir = "/home/ywu840/Pattern-Gen/Tiger"
-src_dir = "/data/yil708/Code-Skink/sam3/train"
+src_dir = "/data/yil708/Code-Skink/sam3/dataset/train_sam3_Lizard"
 src_files = sorted(os.listdir(src_dir))
-dst_dir = "/data/yil708/Code-Skink/sam3/train/pattern"
+dst_dir = "/data/yil708/Code-Skink/sam3/dataset/train_sam3_Lizard/pattern"
 # dst_dir = "/home/ywu840/Pattern-Gen/local_outputs_new"
 os.makedirs(dst_dir, exist_ok = True)
 DEVICE = torch.device(f"cuda:{0}" if torch.cuda.is_available() else "cpu")
@@ -264,6 +264,7 @@ for file in src_files:
     p_map = empirical_p_map(score_map = texture_score_map, inside = inside)
     ################
     selected_bool = inside_bool & (p_map <= 0.0005)
+    ################
     print(f"Number of selected p-values: {selected_bool.sum()}")
     p_inside = p_map[selected_bool]
 
