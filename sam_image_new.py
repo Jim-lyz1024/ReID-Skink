@@ -93,7 +93,8 @@ num_of_success = 0
 # src_files = ["43_-1_0_134_leftphoto.jpg", "44_-1_0_135_leftphoto.jpg", "44_-1_1_135_rightphoto.jpg", "5_-1_13_837_rightphoto.jpg", "69_-1_13_836_rightphoto.jpg"]
 for file in src_files:
     fn, ext = os.path.splitext(file)
-    animal = "Animal"
+    # animal = "Animal"
+    animal = "Lizard"
     # animal = file.split("_")[0]
     # if animal != "Nyala":
     #     continue
