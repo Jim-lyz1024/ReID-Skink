@@ -157,6 +157,7 @@ def nms_pick_k(cands, radius, k):
     """
     # if len(cands) < k:
     #     raise ValueError(f"Number of available candidates ({len(cands)}) is less than K ({k}).")
+    
     chosen = []
     r2 = radius * radius
     for (x, y, s) in cands:    # sorted desc
@@ -232,11 +233,9 @@ def fg_bbox(foreground_masks):
 
 
 
-# src_dir = "/raid/ywu840/Data/Animal_sam3/Stoat"
-# src_dir = "/home/ywu840/Pattern-Gen/Tiger"
-src_dir = "/data/yil708/Code-Skink/sam3/dataset/train_sam3_Animal"
+src_dir = "/data/yil708/Code-Skink/sam3/dataset/train_sam3_Lizard"
 src_files = sorted(os.listdir(src_dir))
-dst_dir = "/data/yil708/Code-Skink/sam3/dataset/train_sam3_Animal/pattern"
+dst_dir = "/data/yil708/Code-Skink/sam3/dataset/train_sam3_Lizard/pattern"
 # dst_dir = "/home/ywu840/Pattern-Gen/local_outputs_new"
 os.makedirs(dst_dir, exist_ok = True)
 DEVICE = torch.device(f"cuda:{0}" if torch.cuda.is_available() else "cpu")
@@ -245,25 +244,12 @@ RADIUS_RATIO = 0.04
 PATCH_SCALE = 0.3
 
 n_chosens = []
+# src_files = ["15_-1_4_fxhdev_fxhdev.jpg", "1_-1_5_mmqiex_mmqiex.jpg", "20_-1_29_zewpoq_zewpoq.jpg", "9_-1_1_xncyph_xncyph.jpg"]
 for file in src_files:
-    # Skip directories and non-image files
-    img_path = os.path.join(src_dir, file)
-    if os.path.isdir(img_path):
-        print(f"Skipping directory: {file}\n")
-        continue
-    if not file.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp')):
-        print(f"Skipping non-image file: {file}\n")
-        continue
-    
     # animal = file.split("_")[0]
+    img_path = os.path.join(src_dir, file)
     print(f"Image: {img_path}")
     image = cv2.imread(filename = img_path)
-    
-    # Skip if image cannot be read
-    if image is None:
-        print(f"Error: Could not read image {file}\n")
-        continue
-    
     print(f"Image Shape: {image.shape}")
     H, W = image.shape[:2]
     foreground_masks, rgb_for_score = get_mask_from_black_bg(image, destination_dir = dst_dir, file = file, bg_mode = "mean", feather = 3)
@@ -276,10 +262,7 @@ for file in src_files:
                                                               show_plot = False)
     inside_bool = inside.astype(bool)
     p_map = empirical_p_map(score_map = texture_score_map, inside = inside)
-    ################
-    # selected_bool = inside_bool & (p_map <= 0.0005)
     selected_bool = inside_bool & (p_map <= 0.0001)
-    ################
     print(f"Number of selected p-values: {selected_bool.sum()}")
     p_inside = p_map[selected_bool]
 
@@ -290,9 +273,9 @@ for file in src_files:
     if sig_map.sum() == 0:
         # print(f"Image: {img_path}")
         # print(f"Number of selected p-values: {selected_bool.sum()}\n")
+        # continue
         # raise ValueError("No significant points are chosen.")
         print("Fallback to original scores.")
-        # continue
         cands = topk_points(score = texture_score_map, topk = 500)
     else:
         local_peaks = local_peaks_from_sig(score_map = texture_score_map, sig_map = sig_map, ksize = 3)
@@ -302,46 +285,55 @@ for file in src_files:
         cands.sort(key = lambda t: t[-1], reverse = True)
 
     nms_radius_px = max(3, int(RADIUS_RATIO * min(H, W)))
-    chosen_points = nms_pick_k(cands = cands, radius = nms_radius_px, k = len(cands))
+    #############################################
+    chosen_points = nms_pick_k(cands = cands, radius = nms_radius_px, k = 5)
+    #############################################
     print(f"Number of chosen points: {len(chosen_points)}")
-    # if len(chosen_points) < 4:
-    #     print("Number of chosen points is insufficient.")
-    #     cands = topk_points(score = texture_score_map, topk = 500)
-    #     new_chosen_points = nms_pick_k(cands = cands, radius = nms_radius_px, k = 10)
-    #     for p in new_chosen_points:
-    #         if len(chosen_points) == 4:
-    #             break
-    #         if p not in chosen_points:
-    #             chosen_points.append(p)
+    #############################################
+    if len(chosen_points) < 5:
+    #############################################
+        print("Number of chosen points is insufficient.")
+        cands = topk_points(score = texture_score_map, topk = 1000)
+        new_chosen_points = nms_pick_k(cands = cands, radius = nms_radius_px, k = 500)
+        for p in new_chosen_points:
+            if len(chosen_points) == 5:
+                break
+            if p not in chosen_points:
+                chosen_points.append(p)
                 
     n_chosens.append(len(chosen_points))
 
-    # patch_size = int(max(16, round(PATCH_SCALE * min(H, W))))
-    # if patch_size % 2 == 1:
-    #     patch_size += 1
-    # print(f"Patch Size: {patch_size}")
+    patch_size = int(max(16, round(PATCH_SCALE * min(H, W))))
+    if patch_size % 2 == 1:
+        patch_size += 1
+    print(f"Patch Size: {patch_size}")
     
     # fg255 = (foreground_masks * 255).astype(np.uint8)
     # rgb_patches, mask_patches, infos = [], [], []
     # plt.figure(figsize = (10, 8))
-    # for idx, (cx, cy, score) in enumerate(chosen_points):
-    #     rgb_patch, rgb_bbox = crop_square(image = rgb_for_score, target_center_x = cx, target_center_y = cy, size = patch_size)
+    #############################################
+    if len(chosen_points) != 5:
+    #############################################
+        print("Incorrect")
+
+    for idx, (cx, cy, score) in enumerate(chosen_points):
+        rgb_patch, rgb_bbox = crop_square(image = rgb_for_score, target_center_x = cx, target_center_y = cy, size = patch_size)
     #     mask_patch, mask_bbox = crop_square(image = fg255, target_center_x = cx, target_center_y = cy, size = patch_size)
     #     fg_cov = float((mask_patch > 0).mean())
 
-    #     plt.subplot(2, 2, idx + 1)
-    #     plt.title(f"Patch {idx + 1} ({fg_cov:.3f})")
-    #     plt.imshow(rgb_patch)
-    #     plt.axis("off")
+        # plt.subplot(2, 2, idx + 1)
+        # plt.title(f"Patch {idx + 1} ({fg_cov:.3f})")
+        # plt.imshow(rgb_patch)
+        # plt.axis("off")
         
-        # fn, ext = os.path.splitext(file)
-        # output_path = os.path.join(dst_dir, f"{fn}_pattern_{idx + 1}{ext}")
-        # cv2.imwrite(output_path, rgb_patch)
+        fn, ext = os.path.splitext(file)
+        output_path = os.path.join(dst_dir, f"{fn}_pattern_{idx + 1}{ext}")
+        cv2.imwrite(output_path, rgb_patch)
     print()
     # plt.tight_layout()
     # plt.show()
-mode_k, freq = mode(num_of_chosens = n_chosens)
-print(f"Modes: {mode_k}, Freq: {freq}")
+# mode_k, freq = mode(num_of_chosens = n_chosens)
+# print(f"Modes: {mode_k}, Freq: {freq}")
 
 """
 selected_points = topk_points(score = texture_score_map, topk = TOPK)
